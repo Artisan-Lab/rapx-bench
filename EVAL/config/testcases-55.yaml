@@ -1,0 +1,2227 @@
+# SP-PoC
+## System
+- description: Producing an invalid value - Uninitialized
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Function std::alloc::alloc
+  type: |-
+    *mut u8
+  value: |-
+    &mut 0usize as *mut usize as *mut u8
+  POS:
+    source: |-
+      unsafe { alloc(layout) }
+    code: |-
+      use std::alloc::{alloc, dealloc, Layout};
+
+      fn main() {
+          let layout = Layout::new::<usize>();
+          let ptr = SOURCE!(); // SOURCE
+          unsafe {
+              let _ = *(ptr as *mut usize) + 1; // BAD SINK
+              dealloc(ptr, layout);
+          }
+      }
+  NEG:
+    source: |-
+      unsafe { alloc(layout) }
+    code: |-
+      use std::alloc::{alloc, dealloc, Layout};
+
+      fn main() {
+          let layout = Layout::new::<usize>();
+          let ptr = SOURCE!(); // SOURCE
+          unsafe {
+              (ptr as *mut usize).write(0);
+              let _ = *(ptr as *mut usize) + 1; // GOOD SINK
+              dealloc(ptr, layout);
+          }
+      }
+
+- description: Dangling pointer access - NPD
+  tags:
+    SP: Non-Null
+    UB: Dangling pointer access
+    TY: NPD
+  features:
+    - Function std::alloc::dealloc
+  type: |-
+    *mut u8
+  value: |-
+    &mut 0usize as *mut usize as *mut u8
+  POS:
+    source: |-
+      null_mut()
+    code: |-
+      use std::{alloc::{dealloc, Layout}, ptr::null_mut};
+
+      fn main() {
+          let layout = Layout::new::<usize>();
+          let ptr = SOURCE!(); // SOURCE
+          unsafe {
+              dealloc(ptr, layout); // BAD SINK
+          }
+      }
+  NEG:
+    source: |-
+      unsafe { alloc(layout) }
+    code: |-
+      use std::alloc::{alloc, dealloc, Layout};
+
+      fn main() {
+          let layout = Layout::new::<usize>();
+          let ptr = SOURCE!(); // SOURCE
+          unsafe {
+              dealloc(ptr, layout); // GOOD SINK
+          }
+      }
+
+- description: Dangling pointer access - NPD
+  tags:
+    SP: Non-Null
+    UB: Dangling pointer access
+    TY: NPD
+  features:
+    - Function std::alloc::realloc
+  type: |-
+    *mut u8
+  value: |-
+    &mut 0u8 as *mut u8
+  POS:
+    source: |-
+      null_mut()
+    code: |-
+      use std::{alloc::{dealloc, realloc, Layout}, ptr::null_mut};
+      fn main() {
+          let mut layout = Layout::from_size_align(1, 1).unwrap();
+          let mut ptr = SOURCE!(); // SOURCE
+          ptr = unsafe { realloc(ptr, layout, 2) }; // BAD SINK
+          
+          layout = Layout::from_size_align(2, 1).unwrap();
+          unsafe { dealloc(ptr, layout) };
+      }
+  NEG:
+    source: |-
+      unsafe { alloc(layout) }
+    code: |-
+      use std::alloc::{alloc, dealloc, realloc, Layout};
+      fn main() {
+          let mut layout = Layout::from_size_align(1, 1).unwrap();
+          let mut ptr = SOURCE!(); // SOURCE
+          ptr = unsafe { realloc(ptr, layout, 2) }; // GOOD SINK
+          
+          layout = Layout::from_size_align(2, 1).unwrap();
+          unsafe { dealloc(ptr, layout) };
+      }
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: Freed
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Function std::alloc::realloc
+  type: |-
+    *mut u8
+  value: |-
+    &mut 0u8 as *mut u8
+  POS:
+    source: |-
+      unsafe { alloc(layout) }
+    code: |-
+      use std::alloc::{alloc, dealloc, realloc, Layout};
+      fn main() {
+          let mut layout = Layout::from_size_align(1, 1).unwrap();
+          let ptr = SOURCE!(); // SOURCE
+          let new_ptr = unsafe { realloc(ptr, layout, 2) }; // BAD SINK
+          
+          unsafe { dealloc(ptr, layout) };
+          layout = Layout::from_size_align(2, 1).unwrap();
+          unsafe { dealloc(new_ptr, layout) };
+      }
+  NEG:
+    source: |-
+      unsafe { alloc(layout) }
+    code: |-
+      use std::alloc::{alloc, dealloc, realloc, Layout};
+      fn main() {
+          let mut layout = Layout::from_size_align(1, 1).unwrap();
+          let ptr = SOURCE!(); // SOURCE
+          let new_ptr = unsafe { realloc(ptr, layout, 2) }; // GOOD SINK
+          
+          layout = Layout::from_size_align(2, 1).unwrap();
+          unsafe { dealloc(new_ptr, layout) };
+      }
+
+## Box
+- description: Producing an invalid value - Uninitialized
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Method std::boxed::Box::assume_init
+  type: |-
+    Box<std::mem::MaybeUninit<usize>>
+  value: |-
+    {
+        let mut z = Box::<usize>::new_uninit();
+        unsafe { z.as_mut_ptr().write(5) };
+        z
+    }
+  POS:
+    source: |-
+      Box::<usize>::new_uninit()
+    code: |-
+      #![feature(new_uninit)]
+      fn main() {
+          let x = SOURCE!(); // SOURCE
+          let y = unsafe { x.assume_init() }; // BAD SINK
+          assert_eq!(*y, 0);
+      }
+  NEG:
+    source: |-
+      Box::<usize>::new_uninit()
+    code: |-
+      #![feature(new_uninit)]
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          unsafe { x.as_mut_ptr().write(5); }
+          let y = unsafe { x.assume_init() }; // GOOD SINK
+          assert_eq!(*y, 5);
+      }
+
+## Rc
+- description: Producing an invalid value - Uninitialized
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Method std::rc::Rc::assume_init
+  type: |-
+    Rc<std::mem::MaybeUninit<usize>>
+  value: |-
+    {
+        let mut x = Rc::<usize>::new_uninit();
+        Rc::get_mut(&mut x).unwrap().write(5);
+        x
+    }
+  POS:
+    source: |-
+      Rc::<usize>::new_uninit()
+    code: |-
+      #![feature(new_uninit)]
+      use std::rc::Rc;
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          let y = unsafe { x.assume_init() }; // BAD SINK
+          assert_eq!(*y, 0);
+      }
+  NEG:
+    source: |-
+      Rc::<usize>::new_uninit()
+    code: |-
+      #![feature(new_uninit)]
+      use std::rc::Rc;
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          Rc::get_mut(&mut x).unwrap().write(5);
+          let y = unsafe { x.assume_init() }; // GOOD SINK
+          assert_eq!(*y, 5);
+      }
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Freed
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method std::rc::Rc::decrement_strong_count
+  type: |-
+    *const usize
+  value: |-
+    {
+        let z = Rc::new(5usize);
+        let ptr = Rc::into_raw(z);
+        unsafe {
+            Rc::increment_strong_count(ptr);
+        }
+        ptr
+    }
+  POS:
+    source: |-
+      Rc::into_raw(x)
+    code: |-
+      use std::rc::Rc;
+      fn main() {
+          let x = Rc::new(5usize);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe {
+              Rc::decrement_strong_count(ptr);
+              Rc::decrement_strong_count(ptr); // BAD SINK
+          }
+      }
+  NEG:
+    source: |-
+      Rc::into_raw(x)
+    code: |-
+      use std::rc::Rc;
+      fn main() {
+          let x = Rc::new(5usize);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe {
+              Rc::decrement_strong_count(ptr); // GOOD SINK
+          }
+      }
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Outlived
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method std::rc::Rc::get_mut_unchecked
+  type: |-
+    Rc<&'static str>
+  value: |-
+    let z: Rc<&str> = Rc::new("Hello, world!");
+    z.clone().into()
+  POS:
+    source: |-
+      x.clone().into()
+    code: |-
+      #![feature(get_mut_unchecked)]
+      use std::rc::Rc;
+      fn main() {
+          let x: Rc<&str> = Rc::new("Hello, world!");
+          {
+              let s = String::from("Oh, no!");
+              let mut y: Rc<&str> = SOURCE!(); // SOURCE
+              unsafe {
+                  *Rc::get_mut_unchecked(&mut y) = &s; // BAD SINK
+              }
+          }
+          let _ = x.len();
+      }
+  NEG:
+    source: |-
+      x.clone().into()
+    code: |-
+      #![feature(get_mut_unchecked)]
+      use std::rc::Rc;
+      fn main() {
+          let x: Rc<&str> = Rc::new("Hello, world!");
+          let s = String::from("Oh, no!");
+          {
+              let mut y: Rc<&str> = SOURCE!(); // SOURCE
+              unsafe {
+                  *Rc::get_mut_unchecked(&mut y) = &s; // GOOD SINK
+              }
+          }
+          let _ = x.len();
+      }
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Non-Dangling
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method std::rc::Rc::increment_strong_count
+  type: |-
+    *const usize
+  value: |-
+    let z = Rc::new(5usize);
+    Rc::into_raw(z)
+  POS:
+    source: |-
+      {
+          let ptr = Rc::into_raw(x);
+          unsafe { Rc::decrement_strong_count(ptr); }
+          ptr
+      }
+    code: |-
+      use std::rc::Rc;
+      fn main() {
+          let x = Rc::new(5usize);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe {
+              Rc::increment_strong_count(ptr); // BAD SINK
+          }
+      }
+  NEG:
+    source: |-
+      Rc::into_raw(x)
+    code: |-
+      use std::rc::Rc;
+      fn main() {
+          let x = Rc::new(0usize);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe {
+              Rc::increment_strong_count(ptr); // GOOD SINK
+              Rc::decrement_strong_count(ptr);
+              Rc::from_raw(ptr);
+          }
+      }
+
+## Into_iter
+- description: Producing an invalid value - Uninitialized
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Method core::array::iter::IntoIter::new_unchecked
+  type: |-
+    [MaybeUninit<u8>; 3]
+  value: |-
+    {
+        let mut buffer: [MaybeUninit<u8>; 3] = MaybeUninit::uninit_array();
+        buffer[0].write(0);
+        buffer[1].write(1);
+        buffer[2].write(2);
+        buffer
+    }
+  POS:
+    source: |-
+      MaybeUninit::uninit_array()
+    code: |-
+      #![feature(array_value_iter)]
+      #![feature(array_into_iter_constructors)]
+      #![feature(maybe_uninit_uninit_array)]
+      use std::{array::IntoIter, mem::MaybeUninit};
+
+      fn main() {
+          let mut buffer: [MaybeUninit<u8>; 3] = SOURCE!(); // SOURCE
+          let x = unsafe { IntoIter::new_unchecked(buffer, 0..2) };
+          let _ = x.collect::<Vec<_>>(); // BAD SINK
+      }
+  NEG:
+    source: |-
+      MaybeUninit::uninit_array()
+    code: |-
+      #![feature(array_value_iter)]
+      #![feature(array_into_iter_constructors)]
+      #![feature(maybe_uninit_uninit_array)]
+      use std::{array::IntoIter, mem::MaybeUninit};
+
+      fn main() {
+          let mut buffer: [MaybeUninit<u8>; 3] = SOURCE!(); // SOURCE
+          buffer[0].write(0);
+          buffer[1].write(1);
+          buffer[2].write(2);
+          let x = unsafe { IntoIter::new_unchecked(buffer, 0..2) };
+          let _ = x.collect::<Vec<_>>(); // GOOD SINK
+      }
+
+- description: Dangling pointer access - BO - The range must be in-bounds for the buffer, with initialized.end <= N
+  tags:
+    SP: Dereferencable
+    UB: Dangling pointer access
+    TY: BO
+  features:
+    - Method core::array::iter::IntoIter::new_unchecked
+  type: |-
+    std::ops::Range<usize>
+  value: |-
+    0..2usize
+  POS:
+    source: |-
+      0..5usize
+    code: |-
+      #![feature(array_value_iter)]
+      #![feature(array_into_iter_constructors)]
+      #![feature(maybe_uninit_uninit_array)]
+      use std::{array::IntoIter, mem::MaybeUninit};
+
+      fn main() {
+          let mut buffer: [MaybeUninit<u8>; 3] = MaybeUninit::uninit_array();
+          buffer[0].write(0);
+          buffer[1].write(1);
+          buffer[2].write(2);
+          let range = SOURCE!(); // SOURCE
+          let x = unsafe { IntoIter::new_unchecked(buffer, range) };
+          let _ = x.collect::<Vec<_>>(); // BAD SINK
+      }
+  NEG:
+    source: |-
+      0..2usize
+    code: |-
+      #![feature(array_value_iter)]
+      #![feature(array_into_iter_constructors)]
+      #![feature(maybe_uninit_uninit_array)]
+      use std::{array::IntoIter, mem::MaybeUninit};
+
+      fn main() {
+          let mut buffer: [MaybeUninit<u8>; 3] = MaybeUninit::uninit_array();
+          buffer[0].write(0);
+          buffer[1].write(1);
+          buffer[2].write(2);
+          let range = SOURCE!(); // SOURCE
+          let x = unsafe { IntoIter::new_unchecked(buffer, range) };
+          let _ = x.collect::<Vec<_>>(); // GOOD SINK
+      }
+
+## CStr
+- description: Producing an invalid value - BO - The memory pointed to by ptr must contain a valid nul terminator at the end of the string
+  tags:
+    SP: Encoded
+    UB: Producing an invalid value
+    TY: BO
+  features:
+    - Method core::ffi::c_str::CStr::from_ptr
+  type: |-
+    *const c_char
+  value: |-
+    b"111!\0".as_ptr().cast()
+  POS:
+    source: |-
+      b"111".as_ptr().cast()
+    code: |-
+      use std::ffi::{c_char, CStr};
+
+      fn main() {
+          let ptr: *const c_char = SOURCE!(); // SOURCE
+          unsafe { let _ = CStr::from_ptr(ptr); }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      b"111\0".as_ptr().cast()
+    code: |-
+      use std::ffi::{c_char, CStr};
+
+      fn main() {
+          let ptr: *const c_char = SOURCE!(); // SOURCE
+          unsafe { let _ = CStr::from_ptr(ptr); }; // GOOD SINK
+      }
+
+## ManuallyDrop
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Freed
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::mem::manually_drop::ManuallyDrop::drop
+  type: |-
+    ManuallyDrop<Box<usize>>
+  value: |-
+    ManuallyDrop::<Box<usize>>::new(Box::new(1))
+  POS:
+    source: |-
+      ManuallyDrop::<Box<usize>>::new(Box::new(1))
+    code: |-
+      use std::mem::ManuallyDrop;
+
+      fn main() {
+          let mut slot: ManuallyDrop<Box<usize>> = SOURCE!(); // SOURCE
+          unsafe {
+              ManuallyDrop::drop(&mut slot);
+          }
+          ManuallyDrop::into_inner(slot); // BAD SINK
+      }
+  NEG:
+    source: |-
+      ManuallyDrop::<Box<usize>>::new(Box::new(1))
+    code: |-
+      use std::mem::ManuallyDrop;
+
+      fn main() {
+          let mut slot: ManuallyDrop<Box<usize>> = SOURCE!(); // SOURCE
+          unsafe {
+              ManuallyDrop::drop(&mut slot);
+          }
+      } // GOOD SINK
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::mem::manually_drop::ManuallyDrop::take
+  type: |-
+    ManuallyDrop<Box<usize>>
+  value: |-
+    ManuallyDrop::<Box<usize>>::new(Box::new(1))
+  POS:
+    source: |-
+      ManuallyDrop::<Box<usize>>::new(Box::new(1))
+    code: |-
+      #![feature(manually_drop_take)]
+      use std::mem::ManuallyDrop;
+
+      fn main() {
+          let mut slot = SOURCE!(); // SOURCE
+          unsafe { let _ = ManuallyDrop::take(&mut slot); };
+          ManuallyDrop::into_inner(slot); // BAD SINK
+      }
+  NEG:
+    source: |-
+      ManuallyDrop::<Box<usize>>::new(Box::new(1))
+    code: |-
+      #![feature(manually_drop_take)]
+      use std::mem::ManuallyDrop;
+
+      fn main() {
+          let mut slot = SOURCE!(); // SOURCE
+          
+          ManuallyDrop::into_inner(slot); // GOOD SINK
+      }
+
+## MaybeUninit
+- description: Producing an invalid value - Uninitialized - It is up to the caller to guarantee that all elements of the array are in an initialized state
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Method core::mem::maybe_uninit::MaybeUninit::array_assume_init
+  type: |-
+    [MaybeUninit<i32>; 3]
+  value: |-
+    {
+        let mut z: [MaybeUninit<i32>; 3] = MaybeUninit::uninit_array();
+        z[0].write(0);
+        z
+    }
+  POS:
+    source: |-
+      MaybeUninit::uninit_array()
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      #![feature(maybe_uninit_array_assume_init)]
+      #![feature(maybe_uninit_uninit_array)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut array: [MaybeUninit<i32>; 3] = SOURCE!(); // SOURCE
+          array[1].write(1);
+          array[2].write(2);
+
+          let res = unsafe { MaybeUninit::array_assume_init(array) }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      {
+          let mut array: [MaybeUninit<i32>; 3] = MaybeUninit::uninit_array();
+          array[0].write(0);
+          array
+      }
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      #![feature(maybe_uninit_array_assume_init)]
+      #![feature(maybe_uninit_uninit_array)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut array: [MaybeUninit<i32>; 3] = SOURCE!(); // SOURCE
+          array[1].write(1);
+          array[2].write(2);
+
+          let res = unsafe { MaybeUninit::array_assume_init(array) }; // GOOD SINK
+      }
+
+- description: Producing an invalid value - Uninitialized
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Method core::mem::maybe_uninit::MaybeUninit::assume_init
+  type: |-
+    MaybeUninit<usize>
+  value: |-
+    {
+        let mut z = MaybeUninit::<usize>::uninit();
+        z.write(1);
+        z
+    }
+  POS:
+    source: |-
+      MaybeUninit::<usize>::uninit()
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let x = SOURCE!(); // SOURCE
+          unsafe { x.assume_init() }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      {
+          let mut x = MaybeUninit::<usize>::uninit();
+          x.write(1);
+          x
+      }
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let x = SOURCE!(); // SOURCE
+          unsafe { x.assume_init() }; // GOOD SINK
+      }
+
+- description: Producing an invalid value - Uninitialized
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Method core::mem::maybe_uninit::MaybeUninit::assume_init_drop
+  type: |-
+    MaybeUninit<Box<usize>>
+  value: |-
+    {
+        let mut z = MaybeUninit::<Box<usize>>::uninit();
+        z.write(Box::new(1));
+        z
+    }
+  POS:
+    source: |-
+      MaybeUninit::<Box<usize>>::uninit()
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          unsafe { x.assume_init_drop() }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      {
+          let mut x = MaybeUninit::<Box<usize>>::uninit();
+          x.write(Box::new(1));
+          x
+      }
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          unsafe { x.assume_init_drop() }; // GOOD SINK
+      }
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Freed
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::mem::maybe_uninit::MaybeUninit::assume_init_drop
+  type: |-
+    MaybeUninit<Box<usize>>
+  value: |-
+    MaybeUninit::<Box<usize>>::uninit()
+  POS:
+    source: |-
+      MaybeUninit::<Box<usize>>::uninit()
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          x.write(Box::new(1));
+          unsafe {
+              x.assume_init_drop();
+          }
+          unsafe { x.assume_init() }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      MaybeUninit::<Box<usize>>::uninit()
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          x.write(Box::new(1));
+          unsafe {
+              x.assume_init_drop();
+          }
+      } // GOOD SINK
+
+- description: Producing an invalid value - Uninitialized
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Method core::mem::maybe_uninit::MaybeUninit::assume_init_mut
+  type: |-
+    MaybeUninit<Cell<bool>>
+  value: |-
+    {
+        let mut z = MaybeUninit::<Cell<bool>>::uninit();
+        z.write(Cell::new(true));
+        z
+    }
+  POS:
+    source: |-
+      MaybeUninit::<Cell<bool>>::uninit()
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      #![feature(maybe_uninit_ref)]
+      use std::{cell::Cell, mem::MaybeUninit};
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          unsafe { x.assume_init_mut().set(true); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      {
+        let mut x = MaybeUninit::<Cell<bool>>::uninit();
+        x.write(Cell::new(true));
+        x
+      }
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      #![feature(maybe_uninit_ref)]
+      use std::{cell::Cell, mem::MaybeUninit};
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          unsafe { x.assume_init_mut().set(true); } // GOOD SINK
+      }
+
+- description: Producing an invalid value - Uninitialized
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Method core::mem::maybe_uninit::MaybeUninit::assume_init_read
+  type: |-
+    MaybeUninit<usize>
+  value: |-
+    {
+        let mut z = MaybeUninit::<usize>::uninit();
+        z.write(0);
+        z
+    }
+  POS:
+    source: |-
+      MaybeUninit::<usize>::uninit()
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      #![feature(maybe_uninit_ref)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          unsafe { x.assume_init_read() }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      {
+          let mut x = MaybeUninit::<usize>::uninit();
+          x.write(0);
+          x
+      }
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      #![feature(maybe_uninit_ref)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          unsafe { x.assume_init_read() }; // GOOD SINK
+      }
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Freed
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::mem::maybe_uninit::MaybeUninit::assume_init_read
+  type: |-
+    MaybeUninit<Box<usize>>
+  value: |-
+    {
+        let mut z = MaybeUninit::<Box<usize>>::uninit();
+        z.write(Box::new(0));
+        z
+    }
+  POS:
+    source: |-
+      {
+          let mut x = MaybeUninit::<Box<usize>>::uninit();
+          x.write(Box::new(0));
+          unsafe { x.assume_init_read() };
+          x
+      }
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      #![feature(maybe_uninit_ref)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          unsafe { x.assume_init_read() }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      {
+          let mut x = MaybeUninit::<Box<usize>>::uninit();
+          x.write(Box::new(0));
+          x
+      }
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      #![feature(maybe_uninit_ref)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          unsafe { x.assume_init_read() }; // GOOD SINK
+      }
+
+- description: Producing an invalid value - Uninitialized
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Method core::mem::maybe_uninit::MaybeUninit::assume_init_ref
+  type: |-
+    MaybeUninit<Vec<usize>>
+  value: |-
+    {
+        let mut z = MaybeUninit::<Vec<usize>>::uninit();
+        z.write(vec![0]);
+        z
+    }
+  POS:
+    source: |-
+      MaybeUninit::<Vec<usize>>::uninit()
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      #![feature(maybe_uninit_ref)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          unsafe { x.assume_init_ref().is_empty() }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      {
+          let mut x = MaybeUninit::<Vec<usize>>::uninit();
+          x.write(vec![0]);
+          x
+      }
+    code: |-
+      #![feature(maybe_uninit_extra)]
+      #![feature(maybe_uninit_ref)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          unsafe { x.assume_init_ref().is_empty() }; // GOOD SINK
+          unsafe { x.assume_init() };
+      }
+
+- description: Producing an invalid value - Uninitialized
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Method core::mem::maybe_uninit::MaybeUninit::slice_assume_init_mut
+  type: |-
+    [MaybeUninit<usize>; 3]
+  value: |-
+    {
+        let mut array: [MaybeUninit<usize>; 3] = MaybeUninit::uninit_array();
+        array[0].write(0);
+        array[1].write(1);
+        array[2].write(2);
+        array
+    }
+  POS:
+    source: |-
+      {
+          let mut array: [MaybeUninit<usize>; 3] = MaybeUninit::uninit_array();
+          array[1].write(1);
+          array[2].write(2);
+          array
+      }
+    code: |-
+      #![feature(maybe_uninit_uninit_array)]
+      #![feature(maybe_uninit_slice)]
+      #![feature(maybe_uninit_extra)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut array = SOURCE!(); // SOURCE
+          unsafe { MaybeUninit::slice_assume_init_mut(&mut array)[0] }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      {
+          let mut array: [MaybeUninit<usize>; 3] = MaybeUninit::uninit_array();
+          array[0].write(0);
+          array[1].write(1);
+          array[2].write(2);
+          array
+      }
+    code: |-
+      #![feature(maybe_uninit_uninit_array)]
+      #![feature(maybe_uninit_slice)]
+      #![feature(maybe_uninit_extra)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut array = SOURCE!(); // SOURCE
+          unsafe { MaybeUninit::slice_assume_init_mut(&mut array)[0] }; // GOOD SINK
+      }
+
+- description: Producing an invalid value - Uninitialized
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Method core::mem::maybe_uninit::MaybeUninit::slice_assume_init_ref
+  type: |-
+    [MaybeUninit<usize>; 3]
+  value: |-
+    {
+        let mut array: [MaybeUninit<usize>; 3] = MaybeUninit::uninit_array();
+        array[0].write(0);
+        array[1].write(1);
+        array[2].write(2);
+        array
+    }
+  POS:
+    source: |-
+      {
+          let mut array: [MaybeUninit<usize>; 3] = MaybeUninit::uninit_array();
+          array[1].write(1);
+          array[2].write(2);
+          array
+      }
+    code: |-
+      #![feature(maybe_uninit_uninit_array)]
+      #![feature(maybe_uninit_slice)]
+      #![feature(maybe_uninit_extra)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut array = SOURCE!(); // SOURCE
+          unsafe { MaybeUninit::slice_assume_init_ref(&mut array)[0] }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      {
+          let mut array: [MaybeUninit<usize>; 3] = MaybeUninit::uninit_array();
+          array[0].write(0);
+          array[1].write(1);
+          array[2].write(2);
+          array
+      }
+    code: |-
+      #![feature(maybe_uninit_uninit_array)]
+      #![feature(maybe_uninit_slice)]
+      #![feature(maybe_uninit_extra)]
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut array = SOURCE!(); // SOURCE
+          unsafe { MaybeUninit::slice_assume_init_ref(&mut array)[0] }; // GOOD SINK
+      }
+
+## Range
+- description: Dangling pointer access - BO - Calling this method with an out-of-bounds index is undefined behavior
+  tags:
+    SP: Dereferencable
+    UB: Dangling pointer access
+    TY: BO
+  features:
+    - Method core::str::traits::Range::get_unchecked
+  type: |-
+    std::ops::Range<usize>
+  value: |-
+    0..2usize
+  POS:
+    source: |-
+      0..5usize
+    code: |-
+      #![feature(slice_index_methods)]
+      use std::slice::SliceIndex;
+      fn main() {
+          let x = String::from("111");
+          let ptr = x.as_str() as *const str;
+          let range = SOURCE!(); // SOURCE
+          unsafe { range.get_unchecked(ptr); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      0..2usize
+    code: |-
+      #![feature(slice_index_methods)]
+      use std::slice::SliceIndex;
+      fn main() {
+          let x = String::from("111");
+          let ptr = x.as_str() as *const str;
+          let range = SOURCE!(); // SOURCE
+          unsafe { range.get_unchecked(ptr); } // GOOD SINK
+      }
+
+- description: Dangling pointer access - UAF - Calling this method with a dangling slice pointer is undefined behavior
+  tags:
+    SP: Non-Dangling
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::str::traits::Range::get_unchecked
+  type: |-
+    *const str
+  value: |-
+    let z = String::from("111");
+    z.as_str() as *const str
+  POS:
+    source: |-
+      {
+          let ptr = x.as_str() as *const str;
+          drop(x);
+          ptr
+      }
+    code: |-
+      #![feature(slice_index_methods)]
+      use std::slice::SliceIndex;
+      fn main() {
+          let x = String::from("111");
+          let ptr = SOURCE!(); // SOURCE
+          let range = 0..2;
+          unsafe { range.get_unchecked(ptr).as_ref(); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      x.as_str() as *const str
+    code: |-
+      #![feature(slice_index_methods)]
+      use std::slice::SliceIndex;
+      fn main() {
+          let x = String::from("111");
+          let ptr = SOURCE!(); // SOURCE
+          let range = 0..2;
+          unsafe { range.get_unchecked(ptr).as_ref(); } // GOOD SINK
+      }
+
+- description: Dangling pointer access - BO - Calling this method with an out-of-bounds index is undefined behavior
+  tags:
+    SP: Dereferencable
+    UB: Dangling pointer access
+    TY: BO
+  features:
+    - Method core::str::traits::Range::get_unchecked_mut
+  type: |-
+    std::ops::Range<usize>
+  value: |-
+    0..2usize
+  POS:
+    source: |-
+      0..5usize
+    code: |-
+      #![feature(slice_index_methods)]
+      use std::slice::SliceIndex;
+      fn main() {
+          let mut x = String::from("111");
+          let ptr = x.as_mut_str() as *mut str;
+          let range = SOURCE!(); // SOURCE
+          unsafe { range.get_unchecked_mut(ptr).as_ref(); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      0..2usize
+    code: |-
+      #![feature(slice_index_methods)]
+      use std::slice::SliceIndex;
+      fn main() {
+          let mut x = String::from("111");
+          let ptr = x.as_mut_str() as *mut str;
+          let range = SOURCE!(); // SOURCE
+          unsafe { range.get_unchecked_mut(ptr).as_ref(); } // GOOD SINK
+      }
+
+- description: Dangling pointer access - UAF - Calling this method with a dangling slice pointer is undefined behavior
+  tags:
+    SP: Non-Dangling
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::str::traits::Range::get_unchecked_mut
+  type: |-
+    *mut str
+  value: |-
+    let mut z = String::from("111");
+    z.as_mut_str() as *mut str
+  POS:
+    source: |-
+      {
+          let ptr = x.as_mut_str() as *mut str;
+          drop(x);
+          ptr
+      }
+    code: |-
+      #![feature(slice_index_methods)]
+      use std::slice::SliceIndex;
+      fn main() {
+          let mut x = String::from("111");
+          let ptr = SOURCE!(); // SOURCE
+          let range = 0..2;
+          unsafe { range.get_unchecked_mut(ptr).as_ref(); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      x.as_mut_str() as *mut str
+    code: |-
+      #![feature(slice_index_methods)]
+      use std::slice::SliceIndex;
+      fn main() {
+          let mut x = String::from("111");
+          let ptr = SOURCE!(); // SOURCE
+          let range = 0..2;
+          unsafe { range.get_unchecked_mut(ptr).as_ref(); } // GOOD SINK
+      }
+
+## Primitive
+### pointer
+- description: Dangling pointer access - BO
+  tags:
+    SP: Dereferencable
+    UB: Dangling pointer access
+    TY: BO
+  features:
+    - Method core::ptr::const_ptr::add
+  type: |-
+    [i32; 3]
+  value: |-
+    [0_i32, 1_i32, 2_i32]
+  POS:
+    source: |-
+      [0_i32, 1_i32, 2_i32]
+    code: |-
+      fn main() {
+          let x = SOURCE!(); // SOURCE
+          let ptr = x.as_ptr();
+          unsafe { *ptr.add(3); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      [0_i32, 1_i32, 2_i32]
+    code: |-
+      fn main() {
+          let x = SOURCE!(); // SOURCE
+          let ptr = x.as_ptr();
+          unsafe { *ptr.add(2); } // GOOD SINK
+      }
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Non-Dangling
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::ptr::mut_ptr::as_mut
+  type: |-
+    *mut usize
+  value: |-
+    let z = Box::new(0usize);
+    Box::into_raw(z)
+  POS:
+    source: |-
+      Box::into_raw(x)
+    code: |-
+      fn main() {
+          let x = Box::new(0usize);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe { Box::from_raw(ptr); }
+          unsafe { ptr.as_mut(); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      Box::into_raw(x)
+    code: |-
+      fn main() {
+          let x = Box::new(0usize);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe { ptr.as_mut(); }
+          unsafe { Box::from_raw(ptr); } // GOOD SINK
+      }
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Non-Dangling
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::ptr::mut_ptr::as_ref
+  type: |-
+    *mut usize
+  value: |-
+    let z = Box::new(0usize);
+    Box::into_raw(z)
+  POS:
+    source: |-
+      Box::into_raw(x)
+    code: |-
+      fn main() {
+          let x = Box::new(0usize);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe { Box::from_raw(ptr); }
+          unsafe { ptr.as_ref(); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      Box::into_raw(x)
+    code: |-
+      fn main() {
+          let x = Box::new(0usize);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe { ptr.as_ref(); }
+          unsafe { Box::from_raw(ptr); } // GOOD SINK
+      }
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Non-Dangling
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::ptr::mut_ptr::as_uninit_mut
+  type: |-
+    *mut usize
+  value: |-
+    let z = Box::new(0usize);
+    Box::into_raw(z)
+  POS:
+    source: |-
+      Box::into_raw(x)
+    code: |-
+      #![feature(ptr_as_uninit)]
+      fn main() {
+          let x = Box::new(0usize);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe { Box::from_raw(ptr); }
+          unsafe { ptr.as_uninit_mut(); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      Box::into_raw(x)
+    code: |-
+      #![feature(ptr_as_uninit)]
+      fn main() {
+          let x = Box::new(0usize);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe { ptr.as_uninit_mut(); } // GOOD SINK
+          unsafe { Box::from_raw(ptr); }
+      }
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Non-Dangling
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::ptr::mut_ptr::as_uninit_ref
+  type: |-
+    *mut usize
+  value: |-
+    let z = Box::new(0usize);
+    Box::into_raw(z)
+  POS:
+    source: |-
+      Box::into_raw(x)
+    code: |-
+      #![feature(ptr_as_uninit)]
+      fn main() {
+          let x = Box::new(0usize);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe { Box::from_raw(ptr); }
+          unsafe { ptr.as_uninit_ref(); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      Box::into_raw(x)
+    code: |-
+      #![feature(ptr_as_uninit)]
+      fn main() {
+          let x = Box::new(0usize);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe { ptr.as_uninit_ref(); } // GOOD SINK
+          unsafe { Box::from_raw(ptr); }
+      }
+
+- description: Dangling pointer access - BO
+  tags:
+    SP: Dereferencable
+    UB: Dangling pointer access
+    TY: BO
+  features:
+    - Method core::ptr::const_ptr::byte_add
+  type: |-
+    [i32; 3]
+  value: |-
+    [0_i32, 1_i32, 2_i32]
+  POS:
+    source: |-
+      [0_i32, 1_i32, 2_i32]
+    code: |-
+      #![feature(pointer_byte_offsets)]
+      fn main() {
+          let x = SOURCE!(); // SOURCE
+          let ptr = x.as_ptr();
+          unsafe { *ptr.byte_add(12); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      [0_i32, 1_i32, 2_i32]
+    code: |-
+      #![feature(pointer_byte_offsets)]
+      fn main() {
+          let x = SOURCE!(); // SOURCE
+          let ptr = x.as_ptr();
+          unsafe { *ptr.byte_add(8); } // GOOD SINK
+      }
+
+- description: Dangling pointer access - BO
+  tags:
+    SP: Dereferencable
+    UB: Dangling pointer access
+    TY: BO
+  features:
+    - Method core::ptr::const_ptr::byte_offset
+  type: |-
+    [i32; 3]
+  value: |-
+    [0_i32, 1_i32, 2_i32]
+  POS:
+    source: |-
+      [0_i32, 1_i32, 2_i32]
+    code: |-
+      #![feature(pointer_byte_offsets)]
+      fn main() {
+          let x = SOURCE!(); // SOURCE
+          let ptr = x.as_ptr();
+          unsafe { *ptr.byte_offset(12); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      [0_i32, 1_i32, 2_i32]
+    code: |-
+      #![feature(pointer_byte_offsets)]
+      fn main() {
+          let x = SOURCE!(); // SOURCE
+          let ptr = x.as_ptr();
+          unsafe { *ptr.byte_offset(8); } // GOOD SINK
+      }
+
+- description: Dangling pointer access - BO
+  tags:
+    SP: Dereferencable
+    UB: Dangling pointer access
+    TY: BO
+  features:
+    - Method core::ptr::const_ptr::offset
+  type: |-
+    [i32; 3]
+  value: |-
+    [0_i32, 1_i32, 2_i32]
+  POS:
+    source: |-
+      [0_i32, 1_i32, 2_i32]
+    code: |-
+      fn main() {
+          let x = SOURCE!(); // SOURCE
+          let ptr = x.as_ptr();
+          unsafe { *ptr.offset(3); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      [0_i32, 1_i32, 2_i32]
+    code: |-
+      fn main() {
+          let x = SOURCE!(); // SOURCE
+          let ptr = x.as_ptr();
+          unsafe { *ptr.offset(2); } // GOOD SINK
+      }
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::ptr::mut_ptr::copy_from
+  type: |-
+    *mut Box<i32>
+  value: |-
+    let mut z = Box::new(0);
+    &mut z as *mut Box<i32>
+  POS:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { dst.copy_from(src, 1); }
+      } // BAD SINK
+  NEG:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { dst.copy_from(src, 1); }
+          forget(y);
+      } // GOOD SINK
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::ptr::mut_ptr::copy_from_nonoverlapping
+  type: |-
+    *mut Box<i32>
+  value: |-
+    let mut z = Box::new(0);
+    &mut z as *mut Box<i32>
+  POS:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { dst.copy_from_nonoverlapping(src, 1); }
+      } // BAD SINK
+  NEG:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { dst.copy_from_nonoverlapping(src, 1); }
+          forget(y);
+      } // GOOD SINK
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::ptr::mut_ptr::copy_to
+  type: |-
+    *mut Box<i32>
+  value: |-
+    let mut z = Box::new(0);
+    &mut z as *mut Box<i32>
+  POS:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { src.copy_to(dst, 1); }
+      } // BAD SINK
+  NEG:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { src.copy_to(dst, 1); }
+          forget(y);
+      } // GOOD SINK
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::ptr::mut_ptr::copy_to_nonoverlapping
+  type: |-
+    *mut Box<i32>
+  value: |-
+    let mut z = Box::new(0);
+    &mut z as *mut Box<i32>
+  POS:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { src.copy_to_nonoverlapping(dst, 1); }
+      } // BAD SINK
+  NEG:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { src.copy_to_nonoverlapping(dst, 1); }
+          forget(y);
+      } // GOOD SINK
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::ptr::mut_ptr::drop_in_place
+  type: |-
+    *mut Box<i32>
+  value: |-
+    let mut z = Box::new(12);
+    &mut z as *mut Box<i32>
+  POS:
+    source: |-
+      &mut x as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let mut x = Box::new(1);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe {
+              ptr.drop_in_place();
+          }
+      } // BAD SINK
+  NEG:
+    source: |-
+      &mut x as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let mut x = Box::new(1);
+          let ptr = SOURCE!(); // SOURCE
+          forget(x);
+          unsafe {
+              ptr.drop_in_place();
+          }
+      } // GOOD SINK
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Non-Dangling
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::ptr::const_ptr::read
+  type: |-
+    *const Box<i32>
+  value: |-
+    let z = Box::new(12);
+    &z as *const Box<i32>
+  POS:
+    source: |-
+      {
+          let x = Box::new(12);
+          &x as *const Box<i32>
+      }
+    code: |-
+      use std::mem::forget;
+      fn main() {
+          let x = Box::new(12);
+          let src = SOURCE!(); // SOURCE
+          unsafe { forget(src.read()); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      &x as *const Box<i32>
+    code: |-
+      use std::mem::forget;
+      fn main() {
+          let x = Box::new(12);
+          let src = SOURCE!(); // SOURCE
+          unsafe { forget(src.read()); } // GOOD SINK
+      }
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::ptr::const_ptr::read
+  type: |-
+    *const Box<i32>
+  value: |-
+    let z = Box::new(12);
+    &z as *const Box<i32>
+  POS:
+    source: |-
+      &x as *const Box<i32>
+    code: |-
+      use std::mem::forget;
+      fn main() {
+          let x = Box::new(12);
+          let src = SOURCE!(); // SOURCE
+          unsafe { src.read(); } // BAD SINK
+      }
+  NEG:
+    source: |-
+      &x as *const Box<i32>
+    code: |-
+      use std::mem::forget;
+      fn main() {
+          let x = Box::new(12);
+          let src = SOURCE!(); // SOURCE
+          unsafe { forget(src.read()); } // GOOD SINK
+      }
+
+## slice
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Non-Dangling
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::slice::raw::from_raw_parts
+  type: |-
+    *const usize
+  value: |-
+    let z = Vec::from([1usize; 2]);
+    z.as_ptr()
+  POS:
+    source: |-
+      x.as_ptr()
+    code: |-
+      use std::{mem::drop, slice};
+
+      fn main() {
+          let x = Vec::from([1usize; 2]);
+          let ptr = SOURCE!(); // SOURCE
+          drop(x);
+          unsafe { slice::from_raw_parts(ptr, 2) }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      x.as_ptr()
+    code: |-
+      use std::{mem::drop, slice};
+
+      fn main() {
+          let x = Vec::from([1usize; 2]);
+          let ptr = SOURCE!(); // SOURCE
+          
+          unsafe { slice::from_raw_parts(ptr, 2) }; // GOOD SINK
+      }
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Non-Dangling
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::slice::raw::from_raw_parts_mut
+  type: |-
+    *mut usize
+  value: |-
+    let mut y = Vec::from([1usize; 2]);
+    y.as_mut_ptr()
+  POS:
+    source: |-
+      x.as_mut_ptr()
+    code: |-
+      use std::{mem::drop, slice};
+
+      fn main() {
+          let mut x = Vec::from([1usize; 2]);
+          let ptr = SOURCE!(); // SOURCE
+          drop(x);
+          unsafe { slice::from_raw_parts_mut(ptr, 2) }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      x.as_mut_ptr()
+    code: |-
+      use std::{mem::drop, slice};
+
+      fn main() {
+          let mut x = Vec::from([1usize; 2]);
+          let ptr = SOURCE!(); // SOURCE
+          
+          unsafe { slice::from_raw_parts_mut(ptr, 2) }; // GOOD SINK
+      }
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Non-Dangling
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::slice::raw::from_ptr_range
+  type: |-
+    std::ops::Range<*const usize>
+  value: |-
+    let y = Vec::from([1usize; 2]);
+    y.as_ptr_range()
+  POS:
+    source: |-
+      x.as_ptr_range()
+    code: |-
+      #![feature(slice_from_ptr_range)]
+      use std::{mem::drop, slice};
+
+      fn main() {
+          let x = Vec::from([1usize; 2]);
+          let range = SOURCE!(); // SOURCE
+          drop(x);
+          unsafe { slice::from_ptr_range(range) }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      x.as_ptr_range()
+    code: |-
+      #![feature(slice_from_ptr_range)]
+      use std::{mem::drop, slice};
+
+      fn main() {
+          let x = Vec::from([1usize; 2]);
+          let range = SOURCE!(); // SOURCE
+          
+          unsafe { slice::from_ptr_range(range) }; // GOOD SINK
+      }
+
+- description: Dangling pointer access - UAF
+  tags:
+    SP: Non-Dangling
+    UB: Dangling pointer access
+    TY: UAF
+  features:
+    - Method core::slice::raw::from_raw_parts_mut
+  type: |-
+    std::ops::Range<*mut usize>
+  value: |-
+    let mut y = Vec::from([1usize; 2]);
+    y.as_mut_ptr_range()
+  POS:
+    source: |-
+      x.as_mut_ptr_range()
+    code: |-
+      #![feature(slice_from_ptr_range)]
+      use std::{mem::drop, slice};
+
+      fn main() {
+          let mut x = Vec::from([1usize; 2]);
+          
+          let range = SOURCE!(); // SOURCE
+          drop(x);
+          unsafe { slice::from_mut_ptr_range(range) }; // BAD SINK
+      }
+  NEG:
+    source: |-
+      x.as_mut_ptr_range()
+    code: |-
+      #![feature(slice_from_ptr_range)]
+      use std::{mem::drop, slice};
+
+      fn main() {
+          let mut x = Vec::from([1usize; 2]);
+          let range = SOURCE!(); // SOURCE
+          
+          unsafe { slice::from_mut_ptr_range(range) }; // GOOD SINK
+      }
+
+# Panic-PoC
+- description: Producing an invalid value - Uninitialized
+  tags:
+    SP: Initialized
+    UB: Producing an invalid value
+    TY: Uninit
+  features:
+    - Method core::mem::maybe_uninit::MaybeUninit::assume_init
+    - PS
+  type: |-
+    MaybeUninit<Box<usize>>
+  value: |-
+    {
+        let mut z = MaybeUninit::<Box<usize>>::uninit();
+        z.write(Box::new(1));
+        z
+    }
+  POS:
+    source: |-
+      MaybeUninit::<Box<usize>>::uninit()
+    code: |-
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          let y = unsafe {
+              x.assume_init()
+          };
+          None::<u8>.unwrap();
+          y.as_ref();
+      } // BAD SINK
+  NEG:
+    source: |-
+      MaybeUninit::<Box<usize>>::uninit()
+    code: |-
+      use std::mem::MaybeUninit;
+
+      fn main() {
+          let mut x = SOURCE!(); // SOURCE
+          let y = unsafe {
+              x.write(Box::new(1));
+              x.assume_init()
+          };
+          None::<u8>.unwrap();
+          y.as_ref();
+      } // GOOD SINK
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::mem::manually_drop::ManuallyDrop::take
+    - PS
+  type: |-
+    ManuallyDrop<Box<usize>>
+  value: |-
+    ManuallyDrop::<Box<usize>>::new(Box::new(1))
+  POS:
+    source: |-
+      ManuallyDrop::<Box<usize>>::new(Box::new(1))
+    code: |-
+      #![feature(manually_drop_take)]
+      use std::mem::{forget, ManuallyDrop};
+
+      fn main() {
+          let mut slot = SOURCE!(); // SOURCE
+          let x = unsafe { ManuallyDrop::take(&mut slot) };
+          let _y = ManuallyDrop::into_inner(slot);
+          None::<u8>.unwrap();
+      } // BAD SINK
+  NEG:
+    source: |-
+      ManuallyDrop::<Box<usize>>::new(Box::new(1))
+    code: |-
+      #![feature(manually_drop_take)]
+      use std::mem::{forget, ManuallyDrop};
+
+      fn main() {
+          let mut slot = SOURCE!(); // SOURCE
+          let x = unsafe { ManuallyDrop::take(&mut slot) };
+          forget(x);
+          let _y = ManuallyDrop::into_inner(slot);
+          None::<u8>.unwrap();
+      } // GOOD SINK
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::ptr::mut_ptr::copy_from
+    - PS
+  type: |-
+    *mut Box<i32>
+  value: |-
+    let mut z = Box::new(0);
+    &mut z as *mut Box<i32>
+  POS:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { dst.copy_from(src, 1); }
+          None::<u8>.unwrap();
+          forget(x);
+      } // BAD SINK
+  NEG:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { dst.copy_from(src, 1); }
+          
+          forget(x);
+      } // GOOD SINK
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::ptr::mut_ptr::copy_from_nonoverlapping
+    - PS
+  type: |-
+    *mut Box<i32>
+  value: |-
+    let mut z = Box::new(0);
+    &mut z as *mut Box<i32>
+  POS:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { dst.copy_from_nonoverlapping(src, 1); }
+          None::<u8>.unwrap();
+          forget(x);
+      } // BAD SINK
+  NEG:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { dst.copy_from_nonoverlapping(src, 1); }
+          
+          forget(x);
+      } // GOOD SINK
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::ptr::mut_ptr::copy_to
+    - PS
+  type: |-
+    *mut Box<i32>
+  value: |-
+    let mut z = Box::new(0);
+    &mut z as *mut Box<i32>
+  POS:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { src.copy_to(dst, 1); }
+          None::<u8>.unwrap();
+          forget(x);
+      } // BAD SINK
+  NEG:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { src.copy_to(dst, 1); }
+          
+          forget(x);
+      } // GOOD SINK
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::ptr::mut_ptr::copy_to_nonoverlapping
+    - PS
+  type: |-
+    *mut Box<i32>
+  value: |-
+    let mut z = Box::new(0);
+    &mut z as *mut Box<i32>
+  POS:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { src.copy_to_nonoverlapping(dst, 1); }
+          None::<u8>.unwrap();
+          forget(x);
+      } // BAD SINK
+  NEG:
+    source: |-
+      &mut y as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let x = Box::new(12);
+          let mut y = Box::new(0);
+          let src = &x as *const Box<i32>;
+          let dst = SOURCE!(); // SOURCE
+          unsafe { src.copy_to_nonoverlapping(dst, 1); }
+          
+          forget(x);
+      } // GOOD SINK
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::ptr::mut_ptr::drop_in_place
+    - PS
+  type: |-
+    *mut Box<i32>
+  value: |-
+    let mut z = Box::new(0);
+    &mut z as *mut Box<i32>
+  POS:
+    source: |-
+      &mut x as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let mut x = Box::new(1);
+          let ptr = SOURCE!(); // SOURCE
+          unsafe {
+              ptr.drop_in_place();
+          }
+          None::<u8>.unwrap(); 
+      } // BAD SINK
+  NEG:
+    source: |-
+      &mut x as *mut Box<i32>
+    code: |-
+      use std::mem::forget;
+
+      fn main() {
+          let mut x = Box::new(1);
+          let ptr = SOURCE!(); // SOURCE
+          forget(x);
+          unsafe {
+              ptr.drop_in_place();
+          }
+          None::<u8>.unwrap();
+      } // GOOD SINK
+
+- description: Dangling pointer access - DF
+  tags:
+    SP: DualOwned
+    UB: Dangling pointer access
+    TY: DF
+  features:
+    - Method core::ptr::const_ptr::read
+    - PS
+  type: |-
+    *const Box<i32>
+  value: |-
+    let mut z = Box::new(0);
+    &mut z as *mut Box<i32>
+  POS:
+    source: |-
+      &x as *const Box<i32>
+    code: |-
+      use std::mem::forget;
+      fn main() {
+          let x = Box::new(12);
+          let src = SOURCE!(); // SOURCE
+          let _y = unsafe { src.read() };
+          None::<u8>.unwrap();
+      } // BAD SINK
+  NEG:
+    source: |-
+      &x as *const Box<i32>
+    code: |-
+      use std::mem::forget;
+      fn main() {
+          let x = Box::new(12);
+          let src = SOURCE!(); // SOURCE
+          forget(x);
+          let _y = unsafe { src.read() };
+          None::<u8>.unwrap();
+      } // GOOD SINK

@@ -1,0 +1,95 @@
+#!/bin/bash
+set -e
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <harness_dir>"
+    echo "Error: Exactly one argument is required."
+    exit 1
+fi
+
+HARNESS_DIR=$(realpath "$1")
+
+# Check if $HARNESS_DIR is a directory
+if [ ! -d "$HARNESS_DIR" ]; then
+    echo "Error: '$HARNESS_DIR' is not a directory or does not exist."
+    exit 1
+fi
+
+# Check if $HARNESS_DIR contains Cargo.toml
+if [ ! -f "$HARNESS_DIR/Cargo.toml" ]; then
+    echo "Error: Directory '$HARNESS_DIR' does not contain a Cargo.toml file."
+    exit 1
+fi
+
+export RUSTFLAGS="-Awarnings"
+CARGO_CMD='cargo +nightly-2024-10-23'
+
+cd "$HARNESS_DIR"
+
+$CARGO_CMD clean -q
+# $CARGO_CMD build -q
+
+output=$(MIRIFLAGS="-Zmiri-ignore-leaks" $CARGO_CMD miri run -q 2>&1 || true)
+exit_code=$?
+
+# 根据退出码处理输出
+if [ $exit_code -eq 0 ]; then
+    # 命令成功，使用嵌入的 Python 脚本处理 JSON 数据
+    echo "$output" | python3 -c '
+import sys
+import re
+
+def parse_tool_output(output):
+    """
+    Parse tool output and extract required information.
+    """
+    tool = "Miri"
+    description = None
+    location = None
+    source = []
+
+    lines = output.splitlines()
+    target_file_pattern = re.compile(r"--> src/main.rs:(\d+):(\d+)")
+
+    for i, line in enumerate(lines):
+        # Extract description
+        if "error:" in line:
+            match = re.search(r"error: (.+):(.+)", line)
+            if match:
+                description = match.group(2).strip() + "(" + match.group(1).strip() + ")"
+
+        # Find the target location specific to `src/main.rs`
+        if target_file_pattern.match(line.strip()):
+            location = target_file_pattern.search(line.strip()).group()
+
+            # Extract the source block directly below the location
+            if i + 2 < len(lines) and lines[i + 1].strip() == "|":
+                source.append(lines[i + 1])  # Line with `|`
+                source.append(lines[i + 2])  # Line with source code
+                source.append(lines[i + 3])  # Line with error marker
+                break
+
+    # If all required fields are found, format the output
+    if description and location and source:
+        source_block = "\n".join(source)
+        return f"[{tool}] Error: {description}\n{location}\n{source_block}"
+    else:
+        return ""
+
+# 从 stdin 读取输入
+input_data = sys.stdin.read()
+
+# 解析并格式化输出
+result = parse_tool_output(input_data)
+
+# 输出到 stdout
+if result.strip():
+    sys.stdout.write(result + "\n")
+'
+else
+    # 命令失败，原样输出错误信息
+    echo "$output"
+fi
+
+# 返回原始退出码
+exit $exit_code

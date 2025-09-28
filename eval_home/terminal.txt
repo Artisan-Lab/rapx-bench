@@ -1,0 +1,219 @@
+
+┌🤘-🐧varixer@ 💻 server - 🧱 EVAL on 🌵  master ✓
+└🤘-> cargo run
+   Compiling memchr v2.7.4
+   Compiling utf8parse v0.2.2
+   Compiling is_terminal_polyfill v1.70.1
+   Compiling cfg-if v1.0.0
+   Compiling regex-syntax v0.8.5
+   Compiling anstyle v1.0.10
+   Compiling colorchoice v1.0.3
+   Compiling anstyle-query v1.1.2
+   Compiling libc v0.2.164
+   Compiling crossbeam-utils v0.8.20
+   Compiling byteorder v1.5.0
+   Compiling serde v1.0.215
+   Compiling itoa v1.0.11
+   Compiling ryu v1.0.18
+   Compiling anstyle-parse v0.2.6
+   Compiling clap_lex v0.7.2
+   Compiling unicode-width v0.2.0
+   Compiling bytecount v0.6.8
+   Compiling zerocopy v0.7.35
+   Compiling anstream v0.6.18
+   Compiling equivalent v1.0.1
+   Compiling hashbrown v0.15.1
+   Compiling fnv v1.0.7
+   Compiling strsim v0.11.1
+   Compiling log v0.4.22
+   Compiling papergrid v0.13.0
+   Compiling either v1.13.0
+   Compiling crossbeam-epoch v0.9.18
+   Compiling unsafe-libyaml v0.2.11
+   Compiling clap_builder v4.5.20
+   Compiling aho-corasick v1.1.3
+   Compiling getrandom v0.2.15
+   Compiling ppv-lite86 v0.2.20
+   Compiling crossbeam-deque v0.8.5
+   Compiling csv-core v0.1.11
+   Compiling indexmap v2.6.0
+   Compiling rand_core v0.6.4
+   Compiling rayon-core v1.12.1
+   Compiling humantime v2.1.0
+   Compiling rand_chacha v0.3.1
+   Compiling rand v0.8.5
+   Compiling tabled v0.17.0
+   Compiling rayon v1.10.0
+   Compiling regex-automata v0.4.9
+   Compiling clap v4.5.20
+   Compiling serde_json v1.0.134
+   Compiling csv v1.3.1
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling regex v1.11.1
+   Compiling env_filter v0.1.2
+   Compiling env_logger v0.11.5
+   Compiling eval v0.1.0 (/home/varixer/code/EVAL)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.45s
+     Running `target/debug/eval`
+error: the following required arguments were not provided:
+  <TOOL>
+
+Usage: eval <TOOL>
+
+For more information, try '--help'.
+
+┌🤘-🐧varixer@ 💻 server - 🧱 EVAL on 🌵  master ✓
+└🤘-> cargo run -- --help
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target/debug/eval --help`
+Usage: eval [OPTIONS] <TOOL>
+
+Arguments:
+  <TOOL>  Tools to be evaluated
+
+Options:
+  -c, --config <DIR>          Configuration file
+  -k, --kind <TYPE>           Evaluation by vulnerability kind (mutually exclusive with --indices) [possible values: UAF, DF, BO, Uninit, NPD, Other]
+  -i, --indices <INDICES>...  Indices of the testcases (mutually exclusive with --kind) [default: ALL]
+  -l, --length <NUM>          Expression sequence length [default: 2]
+  -o, --output <DIR>          Output path
+  -p, --parallel              Enable parallel execution [default: false]
+  -h, --help                  Print help
+
+┌🤘-🐧varixer@ 💻 server - 🧱 EVAL on 🌵  master ✓
+└🤘-> RUST_LOG=debug cargo run -- --help
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running `target/debug/eval --help`
+Usage: eval [OPTIONS] <TOOL>
+
+Arguments:
+  <TOOL>  Tools to be evaluated
+
+Options:
+  -c, --config <DIR>          Configuration file
+  -k, --kind <TYPE>           Evaluation by vulnerability kind (mutually exclusive with --indices) [possible values: UAF, DF, BO, Uninit, NPD, Other]
+  -i, --indices <INDICES>...  Indices of the testcases (mutually exclusive with --kind) [default: ALL]
+  -l, --length <NUM>          Expression sequence length [default: 2]
+  -o, --output <DIR>          Output path
+  -p, --parallel              Enable parallel execution [default: false]
+  -h, --help                  Print help
+
+┌🤘-🐧varixer@ 💻 server - 🧱 EVAL on 🌵  master ✓
+└🤘-> RUST_LOG=info cargo run -- ../eval
+eval.code-workspace  eval_home/           
+
+┌🤘-🐧varixer@ 💻 server - 🧱 EVAL on 🌵  master ✓
+└🤘-> RUST_LOG=info cargo run -- ../eval_home/script/Safedrop -o=../eval_home/TT -k=UAF -p -l=0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target/debug/eval ../eval_home/script/Safedrop -o=../eval_home/TT -k=UAF -p -l=0`
+[2025-03-27T10:28:24Z INFO  eval::config::testcase] Testcases from file: /home/varixer/code/EVAL/config/testcases.yaml
+[2025-03-27T10:28:24Z INFO  eval::config::flow] Flows from file: /home/varixer/code/EVAL/config/expressions.yaml
+[2025-03-27T10:28:24Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-17
+[2025-03-27T10:28:24Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-37
+[2025-03-27T10:28:24Z INFO  eval] Write testcase-017 with expression-000-0-0 into file system
+[2025-03-27T10:28:24Z INFO  eval] Write testcase-037 with expression-000-0-0 into file system
+[2025-03-27T10:28:24Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-18
+[2025-03-27T10:28:24Z INFO  eval] Write testcase-018 with expression-000-0-0 into file system
+[2025-03-27T10:28:24Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-16
+[2025-03-27T10:28:24Z INFO  eval] Write testcase-016 with expression-000-0-0 into file system
+[2025-03-27T10:28:24Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-31
+[2025-03-27T10:28:24Z INFO  eval] Write testcase-031 with expression-000-0-0 into file system
+[2025-03-27T10:28:24Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-47
+[2025-03-27T10:28:24Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-40
+[2025-03-27T10:28:24Z INFO  eval] Write testcase-047 with expression-000-0-0 into file system
+[2025-03-27T10:28:24Z INFO  eval] Write testcase-040 with expression-000-0-0 into file system
+[2025-03-27T10:28:24Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-58
+[2025-03-27T10:28:24Z INFO  eval] Write testcase-058 with expression-000-0-0 into file system
+[2025-03-27T10:28:24Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-56
+[2025-03-27T10:28:24Z INFO  eval] Write testcase-056 with expression-000-0-0 into file system
+[2025-03-27T10:28:24Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-49
+[2025-03-27T10:28:24Z INFO  eval] Write testcase-049 with expression-000-0-0 into file system
+[2025-03-27T10:28:25Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-62
+[2025-03-27T10:28:25Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-78
+[2025-03-27T10:28:25Z INFO  eval] Write testcase-062 with expression-000-0-0 into file system
+[2025-03-27T10:28:25Z INFO  eval] Write testcase-078 with expression-000-0-0 into file system
+[2025-03-27T10:28:25Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-79
+[2025-03-27T10:28:25Z INFO  eval] Write testcase-079 with expression-000-0-0 into file system
+[2025-03-27T10:28:25Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-72
+[2025-03-27T10:28:25Z INFO  eval] Write testcase-072 with expression-000-0-0 into file system
+[2025-03-27T10:28:25Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-60
+[2025-03-27T10:28:25Z INFO  eval] Write testcase-060 with expression-000-0-0 into file system
+[2025-03-27T10:28:26Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-81
+[2025-03-27T10:28:26Z INFO  eval::utils] Generate Harness: ../eval_home/TT/Safedrop/harness/harness-80
+[2025-03-27T10:28:26Z INFO  eval] Write testcase-081 with expression-000-0-0 into file system
+[2025-03-27T10:28:26Z INFO  eval] Write testcase-080 with expression-000-0-0 into file system
++----------+--------+-------------+-----------+-----------+-------------+-----------+-----------+---------------+
+| 工具     | 用例数 | 真正例 (TP) | 漏报 (FN) | 错误 (EP) | 真反例 (TN) | 误报 (FP) | 错误 (EN) | 鲁棒检测 (RD) |
++----------+--------+-------------+-----------+-----------+-------------+-----------+-----------+---------------+
+| Safedrop | 17     | 9 (9)       | 8 (8)     | 0 (0)     | 9 (9)       | 0 (0)     | 0 (0)     | 9 (9)         |
++----------+--------+-------------+-----------+-----------+-------------+-----------+-----------+---------------+
+在 17 个基础用例的正例中有 8 个正例为漏报和 0 个正例为错误，而剩余的 9 个基础用例的反例中有 0 个反例为误报且 0 个反例为错误。也就是说，总共有 9 个基础用例被成功检测出正例并过滤掉反例（相对鲁棒检测），可进行后续的变体测试。
+而后续对剩余的 9 组基础用例的变体测试中，正例中有 9 组被绝对检测出来、 0 组包含漏报且 0 组错误，而反例中有 9 组被绝对过滤掉、 0 组包含误报且有 0 组包含错误。因此，只有 9 个基础用例的所有变体被成功检测出正例并过滤掉反例（绝对鲁棒检测）。
+
+
+┌🤘-🐧varixer@ 💻 server - 🧱 EVAL on 🌵  master ✓
+└🤘-> cargo run -- ../eval_home/script/Safedrop -o=../eval_home/TT -k=UAF -p -l=0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target/debug/eval ../eval_home/script/Safedrop -o=../eval_home/TT -k=UAF -p -l=0`
++----------+--------+-------------+-----------+-----------+-------------+-----------+-----------+---------------+
+| 工具     | 用例数 | 真正例 (TP) | 漏报 (FN) | 错误 (EP) | 真反例 (TN) | 误报 (FP) | 错误 (EN) | 鲁棒检测 (RD) |
++----------+--------+-------------+-----------+-----------+-------------+-----------+-----------+---------------+
+| Safedrop | 17     | 9 (9)       | 8 (8)     | 0 (0)     | 9 (9)       | 0 (0)     | 0 (0)     | 9 (9)         |
++----------+--------+-------------+-----------+-----------+-------------+-----------+-----------+---------------+
+在 17 个基础用例的正例中有 8 个正例为漏报和 0 个正例为错误，而剩余的 9 个基础用例的反例中有 0 个反例为误报且 0 个反例为错误。也就是说，总共有 9 个基础用例被成功检测出正例并过滤掉反例（相对鲁棒检测），可进行后续的变体测试。
+而后续对剩余的 9 组基础用例的变体测试中，正例中有 9 组被绝对检测出来、 0 组包含漏报且 0 组错误，而反例中有 9 组被绝对过滤掉、 0 组包含误报且有 0 组包含错误。因此，只有 9 个基础用例的所有变体被成功检测出正例并过滤掉反例（绝对鲁棒检测）。
+
+
+┌🤘-🐧varixer@ 💻 server - 🧱 EVAL on 🌵  master ✓
+└🤘-> RUST_LOG=debug cargo run -- --help
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target/debug/eval --help`
+Usage: eval [OPTIONS] <TOOL>
+
+Arguments:
+  <TOOL>  Tools to be evaluated
+
+Options:
+  -c, --config <DIR>          Configuration file
+  -k, --kind <TYPE>           Evaluation by vulnerability kind (mutually exclusive with --indices) [possible values: UAF, DF, BO, Uninit, NPD, Other]
+  -i, --indices <INDICES>...  Indices of the testcases (mutually exclusive with --kind) [default: ALL]
+  -l, --length <NUM>          Expression sequence length [default: 2]
+  -o, --output <DIR>          Output path
+  -p, --parallel              Enable parallel execution [default: false]
+  -h, --help                  Print help
+
+┌🤘-🐧varixer@ 💻 server - 🧱 EVAL on 🌵  master ✓
+└🤘-> cargo run -- ../eval_home/script/Safedrop -o=../eval_home/TT -i=0 1 2 12 -p -l=0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target/debug/eval ../eval_home/script/Safedrop -o=../eval_home/TT -i=0 1 2 12 -p -l=0`
+error: unexpected argument '1' found
+
+Usage: eval [OPTIONS] <TOOL>
+
+For more information, try '--help'.
+
+┌🤘-🐧varixer@ 💻 server - 🧱 EVAL on 🌵  master ✓
+└🤘-> cargo run -- ../eval_home/script/Safedrop -o=../eval_home/TT -p -l=0 -i=0 1 2 12
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target/debug/eval ../eval_home/script/Safedrop -o=../eval_home/TT -p -l=0 -i=0 1 2 12`
+error: unexpected argument '1' found
+
+Usage: eval [OPTIONS] <TOOL>
+
+For more information, try '--help'.
+
+┌🤘-🐧varixer@ 💻 server - 🧱 EVAL on 🌵  master ✓
+└🤘-> cargo run -- ../eval_home/script/Safedrop -o=../eval_home/TT -p -l=0 -i 0 1 2 12
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target/debug/eval ../eval_home/script/Safedrop -o=../eval_home/TT -p -l=0 -i 0 1 2 12`
++----------+--------+-------------+-----------+-----------+-------------+-----------+-----------+---------------+
+| 工具     | 用例数 | 真正例 (TP) | 漏报 (FN) | 错误 (EP) | 真反例 (TN) | 误报 (FP) | 错误 (EN) | 鲁棒检测 (RD) |
++----------+--------+-------------+-----------+-----------+-------------+-----------+-----------+---------------+
+| Safedrop | 4      | 0 (0)       | 4 (4)     | 0 (0)     | 0 (0)       | 0 (0)     | 0 (0)     | 0 (0)         |
++----------+--------+-------------+-----------+-----------+-------------+-----------+-----------+---------------+
+在 4 个基础用例的正例中有 4 个正例为漏报和 0 个正例为错误，而剩余的 0 个基础用例的反例中有 0 个反例为误报且 0 个反例为错误。也就是说，总共有 0 个基础用例被成功检测出正例并过滤掉反例（相对鲁棒检测），可进行后续的变体测试。
+而后续对剩余的 0 组基础用例的变体测试中，正例中有 0 组被绝对检测出来、 0 组包含漏报且 0 组错误，而反例中有 0 组被绝对过滤掉、 0 组包含误报且有 0 组包含错误。因此，只有 0 个基础用例的所有变体被成功检测出正例并过滤掉反例（绝对鲁棒检测）。
+
+
+┌🤘-🐧varixer@ 💻 server - 🧱 EVAL on 🌵  master ✓
+└🤘-> 

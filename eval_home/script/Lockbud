@@ -1,0 +1,122 @@
+#!/bin/bash
+set -e
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <harness_dir>"
+    echo "Error: Exactly one argument is required."
+    exit 1
+fi
+
+HARNESS_DIR=$(realpath "$1")
+
+# Check if $HARNESS_DIR is a directory
+if [ ! -d "$HARNESS_DIR" ]; then
+    echo "Error: '$HARNESS_DIR' is not a directory or does not exist."
+    exit 1
+fi
+
+# Check if $HARNESS_DIR contains Cargo.toml
+if [ ! -f "$HARNESS_DIR/Cargo.toml" ]; then
+    echo "Error: Directory '$HARNESS_DIR' does not contain a Cargo.toml file."
+    exit 1
+fi
+
+export RUSTFLAGS="-Awarnings"
+
+# export RUST_BACKTRACE=full
+export LOCKBUD_LOG=warn
+
+# To only detect inter,intra
+#export LOCKBUD_FLAGS="--detector-kind deadlock --crate-name-list inter,intra"
+# or shorter
+#export LOCKBUD_FLAGS="-k deadlock -l inter,intra"
+# To skip detecting inter or intra
+#export LOCKBUD_FLAGS="--detector-kind deadlock --blacklist-mode --crate-name-list inter,intra"
+# or shorter
+#export LOCKBUD_FLAGS="-k deadlock -b -l inter,intra"
+#export LOCKBUD_FLAGS="-k deadlock -b -l cc"
+#export LOCKBUD_FLAGS="-k atomicity_violation"
+#export LOCKBUD_FLAGS="-k memory"
+#export LOCKBUD_FLAGS="-k panic"
+# export LOCKBUD_FLAGS="-k all"
+
+CARGO_CMD='cargo +nightly-2024-10-05'
+
+cd "$HARNESS_DIR"
+
+$CARGO_CMD clean -q
+
+# 运行工具命令并捕获输出和退出码
+output=$($CARGO_CMD lockbud -k memory -- -q 2>&1)
+exit_code=$?
+
+# 根据退出码处理输出
+if [ $exit_code -eq 0 ]; then
+    # 命令成功，使用嵌入的 Python 脚本处理 JSON 数据
+    echo "$output" | python3 -c '
+import sys
+import json
+import re
+
+def extract_json_from_logs(output):
+    """
+    Extract JSON content from log lines.
+    """
+    json_blocks = []
+    for line in output.splitlines():
+        # 查找 JSON 内容
+        match = re.search(r"\[.*?\]\s*(\[.*\])", line)
+        if match:
+            json_blocks.append(match.group(1))
+    return json_blocks
+
+def parse_report_output(json_blocks):
+    """
+    Parse the extracted JSON content and convert it to the unified format.
+    """
+    formatted_reports = []
+    for block in json_blocks:
+        try:
+            # Load JSON data
+            reports = json.loads(block)
+
+            # Process each report
+            for report in reports:
+                for report_type, content in report.items():
+                    # Extract required fields
+                    tool = "Lockbud"
+                    description = f"{content.get("explanation", "No explanation provided")} ({content.get("bug_kind", "Unknown")})"
+                    location = content.get("diagnosis", "No diagnosis provided")
+                    source = ""  # Always empty for this format
+
+                    # Format the report
+                    formatted_reports.append(f"[{tool}] Error: {description}\n--> {location}\n{source}")
+        except json.JSONDecodeError:
+            # Skip invalid JSON blocks
+            pass
+    return "\n".join(formatted_reports)
+
+# 从 stdin 读取输入
+input_data = sys.stdin.read()
+
+# 提取 JSON 数据
+json_blocks = extract_json_from_logs(input_data)
+
+# 如果没有 JSON 数据，直接退出
+if not json_blocks:
+    sys.exit(0)
+
+# 转换为统一格式
+result = parse_report_output(json_blocks)
+
+# 输出到 stdout
+if result.strip():
+    sys.stdout.write(result)
+'
+else
+    # 命令失败，原样输出错误信息
+    echo "$output"
+fi
+
+# 返回原始退出码
+exit $exit_code

@@ -1,0 +1,196 @@
+- name: Function call
+  code: |-
+    fn call(param: TYPE!()) -> TYPE!() {
+        EXPRE!(param)
+    }
+    call(SOURCE!())
+
+- name: Array
+  code: |-
+    let array: [TYPE!(); 2] = [SOURCE!(), VALUE!()];
+    let [first, ..] = array;
+    first
+
+- name: Tuple
+  code: |-
+    let tuple: (TYPE!(), String) = (SOURCE!(), String::from("Hello, world!"));
+    tuple.0
+
+
+- name: Stack slice
+  code: |-
+    let slice: &mut [TYPE!()] = &mut [SOURCE!(), VALUE!()][..];
+    std::mem::replace(&mut slice[0], VALUE!())
+
+- name: Heap slice
+  code: |-
+    let mut boxed_array = Box::new([SOURCE!(), VALUE!()]);
+    let slice: &mut [TYPE!()] = &mut boxed_array[..];
+    std::mem::replace(&mut slice[0], VALUE!())
+
+- name: Struct
+  code: |-
+    struct Struct {
+        place: TYPE!(),
+        other: String
+    };
+
+    let struct_struct = Struct {
+        place: SOURCE!(),
+        other: String::from("Hello, world!")
+    };
+    struct_struct.place
+
+- name: Tuple Struct
+  code: |-
+    struct Struct (
+        TYPE!(),
+        String
+    );
+
+    let tuple_struct = Struct (
+        SOURCE!(),
+        String::from("Hello, world!")
+    );
+    tuple_struct.0
+
+- name: Struct update syntax
+  code: |-
+    struct Struct {
+        place: TYPE!(),
+        other: String
+    };
+
+    let base = Struct {
+        place: SOURCE!(),
+        other: String::from("Hello, world!")
+    };
+    let struct_struct = Struct { other: String::from("Hello, world!"), ..base};
+    struct_struct.place
+
+- name: Enum(Tuple) - match
+  code: |-
+    enum Enum {
+        Place(TYPE!()),
+        Other(String),
+    }
+
+    let tuple_enum = Enum::Place(SOURCE!());
+    match tuple_enum {
+        Enum::Place(param) => EXPRE!(param),
+        Enum::Other(_) => VALUE!(),
+    }
+
+- name: Enum(Tuple) - if let
+  code: |-
+    enum Enum {
+        Place(TYPE!()),
+        Other(String),
+    }
+
+    let tuple_enum = Enum::Place(SOURCE!());
+    if let Enum::Place(param) = tuple_enum { EXPRE!(param)
+    } else {
+        VALUE!()
+    }
+
+- name: Enum(Struct) - match
+  code: |-
+    enum Enum {
+        Place{ place: TYPE!(), other: String },
+        Other(String),
+    }
+
+    let struct_enum = Enum::Place{ place: SOURCE!(), other: String::from("Hello, world!")};
+    match struct_enum {
+        Enum::Place{ place: param, other: _ } => EXPRE!(param),
+        Enum::Other(_) => VALUE!(),
+    }
+
+- name: Enum(Struct) - if let
+  code: |-
+    enum Enum {
+        Place{ place: TYPE!(), other: String },
+        Other(String),
+    }
+
+    let struct_enum = Enum::Place{ place: SOURCE!(), other: String::from("Hello, world!") };
+    if let Enum::Place{ place: param, other: _ } = struct_enum {
+        EXPRE!(param)
+    } else {
+        VALUE!()
+    }
+
+- name: Enum(Option) - match
+  code: |-
+    match Some(SOURCE!()) {
+        Some(param) => EXPRE!(param),
+        None => VALUE!(),
+    }
+
+- name: Enum(Option) - if let
+  code: |-
+    if let Some(param) =  Some(SOURCE!()) {
+        EXPRE!(param)
+    } else {
+        VALUE!()
+    }
+
+- name: if else
+  code: |-
+    let param = SOURCE!();
+    if COND!() {
+        EXPRE!(param)
+    } else {
+        EXPRE!(param)
+    }
+
+- name: if let
+  code: |-
+    let param = SOURCE!();
+    if let if_let = param {
+        EXPRE!(if_let)
+    } else {
+        VALUE!()
+    }
+
+- name: match
+  code: |-
+    match SOURCE!() {
+        param => EXPRE!(param),
+        _ => VALUE!()
+    }
+
+- name: loop - if else
+  code: |-
+    let mut param = SOURCE!();
+    loop {
+        param = EXPRE!(param);
+        if COND!() {
+            break EXPRE!(param)
+        } else {
+            break EXPRE!(param)
+        }
+    }
+
+- name: loop - if let
+  code: |-
+    let mut param = SOURCE!();
+    loop {
+        param = EXPRE!(param);
+        if let if_let = param {
+            break EXPRE!(if_let)
+        } else {
+            break VALUE!()
+        }
+    }
+
+- name: while
+  code: |-
+    let mut param = SOURCE!();
+    let mut i = 0;
+    while i < 32 {
+        param = EXPRE!(param);
+        i = i + 1;
+    }
+    param

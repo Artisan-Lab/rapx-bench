@@ -1,0 +1,93 @@
+#!/bin/bash
+set -e
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <harness_dir>"
+    echo "Error: Exactly one argument is required."
+    exit 1
+fi
+
+HARNESS_DIR=$(realpath "$1")
+
+# Check if $HARNESS_DIR is a directory
+if [ ! -d "$HARNESS_DIR" ]; then
+    echo "Error: '$HARNESS_DIR' is not a directory or does not exist."
+    exit 1
+fi
+
+# Check if $HARNESS_DIR contains Cargo.toml
+if [ ! -f "$HARNESS_DIR/Cargo.toml" ]; then
+    echo "Error: Directory '$HARNESS_DIR' does not contain a Cargo.toml file."
+    exit 1
+fi
+
+
+cd "$HARNESS_DIR"
+
+# 定义要追加的内容
+APPEND_CONTENT=$(cat <<EOF
+
+
+#[cfg(kani)]
+#[kani::proof]
+fn kani() {
+    main();
+}
+EOF
+)
+
+# 检查 src/main.rs 文件是否存在
+if [ -f "src/main.rs" ]; then
+    # 追加内容到文件末尾
+    echo "$APPEND_CONTENT" >> src/main.rs
+else
+    exit 1
+fi
+
+output=$(RUSTFLAGS="-Awarnings" cargo kani --output-format terse 2>&1 || true)
+exit_code=$?
+
+# 根据退出码处理输出
+if [ $exit_code -eq 0 ]; then
+    # 命令成功，使用 解析器 转换统一格式输出
+    echo "$output" | python -c '
+import sys
+import re
+
+def extract_verification_results(output):
+    # Check if verification was successful
+    if "VERIFICATION:- SUCCESSFUL" in output:
+        return None
+
+    # Pattern to match failed checks and their details
+    failure_pattern = r"Failed Checks: (.*?)\n File: \"(.*?)\", line (\d+), in (.*?)"
+
+    matches = re.findall(failure_pattern, output)
+
+    # Format and output results
+    if matches:
+        result_lines = []
+        for match in matches:
+            description, file_path, line, source = match
+            result_lines.append(f"[Kani] {description}: {file_path}:{line}")
+        return "\n".join(result_lines)
+
+    return None
+
+# 从 stdin 读取输入
+input_data = sys.stdin.read()
+
+# 解析并格式化输出
+result = extract_verification_results(input_data)
+
+# 输出到 stdout
+if result:
+    sys.stdout.write(result)
+'
+else
+    # 命令失败，原样输出错误信息
+    echo "$output"
+fi
+
+# 返回原始退出码
+exit $exit_code
