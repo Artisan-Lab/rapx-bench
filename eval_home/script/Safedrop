@@ -23,7 +23,7 @@ fi
 
 export RUSTFLAGS="-Awarnings"
 export RAP_LOG="warn"
-CARGO_CMD='cargo +nightly-2024-10-12'
+CARGO_CMD='cargo +nightly-2025-08-10'
 
 cd "$HARNESS_DIR"
 
@@ -33,7 +33,7 @@ exit_code=$?
 # 根据退出码处理输出
 if [ $exit_code -eq 0 ]; then
     # 命令成功，使用 解析器 转换统一格式输出
-    echo "$output" | python -c '
+    echo "$output" | python3 -c '
 import sys
 import re
 
